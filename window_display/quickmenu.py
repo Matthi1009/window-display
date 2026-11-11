@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 
 from .ui import Adw, Gdk, GLib, Gtk, ConfirmWindow, install_css, make_overlay, transparent_window
-from . import hypr, layout, miracast, profiles
+from . import displays, layout, miracast, profiles
 from .util import spawn, notify
 
 APP_ID = "io.github.matthi.WindowDisplay.Menu"
@@ -21,13 +21,13 @@ class MenuWindow(Gtk.Window):
     def __init__(self, app: "MenuApp"):
         super().__init__(application=app)
         self.app = app
-        make_overlay(self, "window-display-menu", anchor_right=True)
+        make_overlay(self, "window-display-menu", anchor_right=True, close_on_blur=True)
         transparent_window(self)
         self.set_resizable(False)
 
         try:
-            self.monitors = hypr.get_monitors()
-        except hypr.HyprError as e:
+            self.monitors = displays.get_monitors()
+        except displays.DisplayError as e:
             self.monitors = []
             app.startup_error = str(e)
         self.current = layout.detect_preset(self.monitors)
@@ -147,10 +147,10 @@ class MenuWindow(Gtk.Window):
             self.close()
             return
         try:
-            before = hypr.snapshot(self.monitors)
+            before = displays.snapshot(self.monitors)
             specs = layout.build(key, self.monitors)
-            hypr.apply(specs)
-        except hypr.HyprError as e:
+            displays.apply(specs)
+        except displays.DisplayError as e:
             self._show_error(str(e))
             return
         app = self.app
@@ -189,9 +189,9 @@ class MenuWindow(Gtk.Window):
 
 def _remember(preset: str) -> None:
     try:
-        mons = hypr.get_monitors()
-        profiles.save(mons, hypr.snapshot(mons), preset)
-    except (hypr.HyprError, OSError) as e:
+        mons = displays.get_monitors()
+        profiles.save(mons, displays.snapshot(mons), preset)
+    except (displays.DisplayError, OSError) as e:
         print(f"Profil konnte nicht gespeichert werden: {e}", file=sys.stderr)
 
 

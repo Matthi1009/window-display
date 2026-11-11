@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from .hypr import Monitor, MonitorSpec
+from .model import Monitor, MonitorSpec
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "window-display"
 PROFILES_FILE = CONFIG_DIR / "profiles.json"

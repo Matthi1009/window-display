@@ -32,11 +32,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import daemon
         return daemon.run()
 
-    from . import hypr, layout
+    from . import displays, layout
     try:
-        mons = hypr.get_monitors()
+        mons = displays.get_monitors()
         if args.cmd == "apply":
-            hypr.apply(layout.build(args.preset, mons))
+            displays.apply(layout.build(args.preset, mons))
             return 0
         for i, mon in enumerate(mons, 1):
             if mon.disabled:
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{i}. {mon.label} [{mon.name}] – {state}")
         print(f"Modus: {layout.PRESETS.get(layout.detect_preset(mons), ('?',))[0]}")
         return 0
-    except hypr.HyprError as e:
+    except displays.DisplayError as e:
         print(f"Fehler: {e}", file=sys.stderr)
         return 1
 

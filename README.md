@@ -1,9 +1,9 @@
 # window-display
 
-**Windows-artige Bildschirm- und Beamer-Verwaltung für Hyprland.**
+**Windows-artige Bildschirm- und Beamer-Verwaltung für Hyprland und GNOME.**
 Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig. Wie `Win+P`, nur auf Linux.
 
-*Windows-style display & projector switcher for Hyprland (Super+P menu, settings window, hotplug profiles).*
+*Windows-style display & projector switcher for Hyprland and GNOME (Super+P menu, settings window, hotplug profiles).*
 
 <p align="center">
   <img src="docs/menu.png" alt="Super+P Schnellmenü" width="45%">
@@ -23,16 +23,30 @@ Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig.
 - **Sicherheitsnetz** – nach jeder Änderung 15 s „Beibehalten?“, sonst automatische Rückkehr zur alten
   Einstellung. Es bleibt immer mindestens ein Bildschirm an; wird der einzige aktive Monitor abgezogen,
   schaltet sich der Laptop-Bildschirm wieder ein.
+- **Aussehen** – folgt automatisch [Matugen](https://github.com/InioX/matugen) bzw. dem System-Theme
+  (Farbwechsel beim Hintergrundbild-Wechsel live), oder selbst einstellen: Hell/Dunkel + Akzentfarbe.
 - **Drahtlos (Miracast)** – startet [GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays),
   falls installiert.
-- **Hyprland-Config bleibt sauber** – Einstellungen werden live gesetzt und in eigenen Profilen gespeichert.
-  Nach einem Config-Reload stellt der Dienst sie automatisch wieder her.
+- **Config bleibt sauber** – Einstellungen werden live gesetzt und in eigenen Profilen gespeichert.
+
+## Unterstützte Desktops
+
+| | Hyprland | GNOME |
+|---|---|---|
+| Monitore steuern über | `hyprctl eval 'hl.monitor({...})'` | Mutter-D-Bus (`org.gnome.Mutter.DisplayConfig`) |
+| Hotplug-Erkennung | Hyprland-Events (socket2) | D-Bus-Signal `MonitorsChanged` |
+| Super+P-Menü | Overlay (gtk4-layer-shell) | Popup-Fenster |
+| Super+P & Autostart | Block in `hyprland.lua` | GNOME-Tastenkürzel + `~/.config/autostart` |
+| Getestet | ✅ Hyprland 0.56 | ⚠️ mit simuliertem Mutter-Zustand (Unit-Tests) |
+
+Der Desktop wird automatisch erkannt; erzwingen geht mit `WINDOW_DISPLAY_BACKEND=hyprland|gnome`.
+Auf GNOME werden Einstellungen als „temporär“ angewendet – GNOMEs eigene `monitors.xml` bleibt unverändert.
 
 ## Voraussetzungen
 
-- Hyprland **0.56+ mit Lua-Config** (`hyprland.lua`)
+- **Hyprland 0.56+ mit Lua-Config** (`hyprland.lua`) **oder GNOME** (Wayland)
 - Python 3.10+, `python-gobject`, `gtk4`, `libadwaita` (≥ 1.5)
-- optional: `gtk4-layer-shell` – damit erscheint das Menü als Overlay (sonst als normales Fenster)
+- optional: `gtk4-layer-shell` – Overlay-Menü auf Hyprland
 - optional: `gnome-network-displays` – für kabellose Beamer/Fernseher
 
 Auf Arch:
@@ -51,51 +65,60 @@ cd window-display
 ./install.sh
 ```
 
-`install.sh` legt `~/.local/bin/window-display` an und hängt einen markierten Block an
-`~/.config/hypr/hyprland.lua` an (vorher wird ein Backup erstellt):
+`install.sh` erkennt den Desktop und
 
-```lua
--- >>> window-display (install.sh)
-hl.bind("SUPER + P", hl.dsp.exec_cmd("~/.local/bin/window-display menu"))
-hl.on("hyprland.start", function() hl.exec_cmd("~/.local/bin/window-display daemon") end)
--- <<< window-display
-```
+- legt `~/.local/bin/window-display` und den App-Eintrag **„Bildschirme“** an,
+- **Hyprland:** hängt einen markierten Block an `~/.config/hypr/hyprland.lua` an (vorher Backup):
+  ```lua
+  -- >>> window-display (install.sh)
+  hl.bind("SUPER + P", hl.dsp.exec_cmd("~/.local/bin/window-display menu"))
+  hl.on("hyprland.start", function() hl.exec_cmd("~/.local/bin/window-display daemon") end)
+  -- <<< window-display
+  ```
+- **GNOME:** legt ein eigenes Tastenkürzel Super+P an, sichert GNOMEs eingebautes Super+P
+  (`switch-monitor`, die Display-Taste bleibt) und trägt den Dienst in den Autostart ein.
 
-Deinstallieren: `./install.sh --uninstall` (Profile bleiben erhalten).
+Deinstallieren: `./install.sh --uninstall` – stellt auch GNOMEs Super+P wieder her (Profile bleiben erhalten).
 
 ## Anwendung
 
 | Befehl | Was es tut |
 |---|---|
 | `window-display menu` | Schnellmenü (Super+P) |
-| `window-display settings` | Einstellungsfenster |
+| `window-display settings` | Einstellungsfenster (auch über den App-Eintrag „Bildschirme“) |
 | `window-display status` | Angeschlossene Bildschirme und aktuellen Modus anzeigen |
 | `window-display apply <modus>` | Modus direkt setzen: `pc_only`, `duplicate`, `extend`, `second_only` |
-| `window-display daemon` | Hintergrunddienst (startet automatisch mit Hyprland) |
+| `window-display daemon` | Hintergrunddienst (startet automatisch) |
 
-Profile liegen in `~/.config/window-display/profiles.json`.
+Gespeichert wird in `~/.config/window-display/`: `profiles.json` (Bildschirm-Profile) und
+`settings.json` (Aussehen).
 
 ## Wie es funktioniert
 
 | Datei | Aufgabe |
 |---|---|
-| `window_display/hypr.py` | liest Monitore (`hyprctl monitors all -j`), setzt sie per `hyprctl eval 'hl.monitor({...})'`, hört auf Hyprland-Events (socket2) |
+| `window_display/model.py` | Datenmodell (Monitor, Modus, gewünschte Einstellung), Prüfungen |
+| `window_display/displays.py` | wählt das passende Backend für den laufenden Desktop |
+| `window_display/backends/hyprland.py` | Hyprland: `hyprctl`, `hl.monitor`, socket2-Events |
+| `window_display/backends/gnome.py` | GNOME: Mutter-DisplayConfig über D-Bus, gemeinsame Auflösung beim Spiegeln |
 | `window_display/layout.py` | die vier Modi, Positionsberechnung, Einrasten beim Ziehen |
 | `window_display/profiles.py` | Profile pro Bildschirm-Kombination |
 | `window_display/daemon.py` | Hotplug-Erkennung, Profile anwenden, Sicherheitsnetz |
 | `window_display/quickmenu.py` | Super+P-Menü |
 | `window_display/settings.py` | Einstellungsfenster |
+| `window_display/theme.py` | Aussehen: Matugen/System oder eigene Farben |
 | `window_display/ui.py` | gemeinsames Styling und „Beibehalten?“-Dialog |
 
 ## Entwicklung
 
 ```sh
-python3 -m unittest discover -s tests     # Tests
+python3 -m unittest discover -s tests     # Tests (inkl. GNOME mit simuliertem Mutter-Zustand)
 python3 -m window_display status          # direkt aus dem Repo starten
 ```
 
-Ohne zweiten Monitor testen: `hyprctl output create headless TEST` legt einen virtuellen Bildschirm an,
-`hyprctl output remove TEST` entfernt ihn wieder.
+Ohne zweiten Monitor testen (Hyprland): `hyprctl output create headless TEST` legt einen virtuellen
+Bildschirm an, `hyprctl output remove TEST` entfernt ihn wieder. Das GNOME-Popup lässt sich auf Hyprland
+mit `WINDOW_DISPLAY_NO_LAYER_SHELL=1 window-display menu` ansehen.
 
 ## Lizenz
 

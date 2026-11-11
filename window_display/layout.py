@@ -1,7 +1,7 @@
 """Windows-style presets (Win+P) and layout helpers."""
 from __future__ import annotations
 
-from .hypr import Monitor, MonitorSpec, HyprError
+from .model import Monitor, MonitorSpec, DisplayError
 
 PRESETS = {
     "pc_only": ("Nur PC-Bildschirm", "computer-symbolic"),
@@ -45,12 +45,12 @@ def split(monitors: list[Monitor]) -> tuple[Monitor | None, list[Monitor]]:
 
 def build(preset: str, monitors: list[Monitor]) -> list[MonitorSpec]:
     if preset not in PRESETS:
-        raise HyprError(f"Unbekannter Modus: {preset}")
+        raise DisplayError(f"Unbekannter Modus: {preset}")
     main, externals = split(monitors)
     if main is None:
-        raise HyprError("Kein Bildschirm gefunden.")
+        raise DisplayError("Kein Bildschirm gefunden.")
     if preset != "pc_only" and not externals:
-        raise HyprError("Kein zweiter Bildschirm angeschlossen.")
+        raise DisplayError("Kein zweiter Bildschirm angeschlossen.")
 
     specs: list[MonitorSpec] = []
 

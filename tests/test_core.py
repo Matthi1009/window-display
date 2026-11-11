@@ -1,6 +1,7 @@
 import unittest
 
-from window_display.hypr import Mode, Monitor, MonitorSpec, spec_to_lua, validate, HyprError
+from window_display.model import Mode, Monitor, MonitorSpec, validate, DisplayError as HyprError
+from window_display.backends.hyprland import spec_to_lua
 from window_display import layout
 
 

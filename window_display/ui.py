@@ -1,11 +1,13 @@
 """Shared GTK pieces: styling, overlay windows and the keep-changes dialog."""
 from __future__ import annotations
 
+import os
+
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 try:
     gi.require_version("Gtk4LayerShell", "1.0")
@@ -13,7 +15,7 @@ try:
 except (ValueError, ImportError):
     LayerShell = None
 
-from . import hypr  # noqa: E402
+from . import displays  # noqa: E402
 
 CONFIRM_SECONDS = 15
 
@@ -24,6 +26,8 @@ CSS = """
   border: 1px solid alpha(@borders, 0.8);
   padding: 18px;
 }
+window.wd-popup { border-radius: 18px; }
+window.wd-popup .wd-panel { border: none; }
 .wd-tile {
   padding: 14px 16px;
   border-radius: 12px;
@@ -45,16 +49,30 @@ def install_css() -> None:
     provider.load_from_string(CSS)
     Gtk.StyleContext.add_provider_for_display(
         Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    from . import theme
+    theme.apply()
 
 
 def layer_shell_ok() -> bool:
+    """wlr-layer-shell exists on Hyprland/Sway, not on GNOME (there: normal popup window)."""
+    if os.environ.get("WINDOW_DISPLAY_NO_LAYER_SHELL"):
+        return False
     return LayerShell is not None and LayerShell.is_supported()
 
 
-def make_overlay(win: Gtk.Window, namespace: str, anchor_right: bool = False) -> None:
-    """Turn a window into a layer-shell overlay (fallback: a normal window)."""
+def make_overlay(win: Gtk.Window, namespace: str, anchor_right: bool = False,
+                 close_on_blur: bool = False) -> None:
+    """Turn a window into a layer-shell overlay (fallback: an undecorated popup window)."""
     if not layer_shell_ok():
         win.set_title("Bildschirme")
+        win.set_decorated(False)
+        win.add_css_class("wd-popup")
+        if close_on_blur:
+            def on_active(w, _p):
+                if not w.is_active() and w.get_visible():
+                    w.close()
+            # attach after the first activation, so the window can't close before it got focus
+            GLib.timeout_add(500, lambda: (win.connect("notify::is-active", on_active), False)[1])
         return
     LayerShell.init_for_window(win)
     LayerShell.set_namespace(win, namespace)
@@ -79,7 +97,7 @@ def transparent_window(win: Gtk.Window) -> None:
 class ConfirmWindow(Gtk.Window):
     """'Keep these display settings?' with automatic revert."""
 
-    def __init__(self, app: Gtk.Application, revert_specs: list[hypr.MonitorSpec],
+    def __init__(self, app: Gtk.Application, revert_specs: list[displays.MonitorSpec],
                  on_done=None, overlay: bool = True):
         super().__init__(application=app)
         self.revert_specs = revert_specs
@@ -163,8 +181,8 @@ class ConfirmWindow(Gtk.Window):
         error = None
         if not keep:
             try:
-                hypr.apply(self.revert_specs)
-            except hypr.HyprError as e:
+                displays.apply(self.revert_specs)
+            except displays.DisplayError as e:
                 error = str(e)
         self.destroy()
         if self.on_done:

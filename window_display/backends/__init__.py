@@ -1,0 +1,1 @@
+"""Compositor backends (Hyprland, GNOME)."""

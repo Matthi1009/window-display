@@ -1,0 +1,13 @@
+#!/bin/bash
+# Launcher für window-display (Bildschirm-Einstellungen für Hyprland)
+DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
+LIB=/usr/lib/libgtk4-layer-shell.so
+case "$1" in
+  menu|settings)
+    # gtk4-layer-shell muss vor libwayland geladen werden
+    if [[ -e $LIB && " $LD_PRELOAD " != *" $LIB "* ]]; then
+      export LD_PRELOAD="$LIB${LD_PRELOAD:+ $LD_PRELOAD}"
+    fi ;;
+esac
+exec python3 -m window_display "$@"

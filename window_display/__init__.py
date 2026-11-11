@@ -1,0 +1,1 @@
+"""Bildschirm-Einstellungen für Hyprland."""

@@ -119,7 +119,7 @@ class MenuWindow(Gtk.Window):
     # -------------------------------------------------------------- actions
     def _focus_initial(self):
         target = self.tiles.get(self.current or "pc_only") or self.tiles["pc_only"]
-        GLib.idle_add(target.grab_focus)
+        GLib.idle_add(lambda: (target.grab_focus(), False)[1])  # False = run once
 
     def cycle(self):
         """Super+P pressed again: move to the next usable option."""

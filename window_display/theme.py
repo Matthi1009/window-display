@@ -9,6 +9,24 @@ from .profiles import CONFIG_DIR
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 MATUGEN_CSS = Path.home() / ".cache" / "matugen" / "colors-gtk.css"
+# Material-You JSON written by other Matugen templates (e.g. widgetdeck's own theme run).
+# In "auto" mode the newest of all sources wins, so the app matches what the desktop shows now.
+MATUGEN_JSON = [Path.home() / ".config" / "widgetdeck" / "theme.json"]
+
+# Same mapping as the usual Matugen gtk.css template (Material role -> GTK named color)
+MATERIAL_TO_GTK = {
+    "theme_bg_color": "surface", "theme_fg_color": "on_surface",
+    "window_bg_color": "surface", "window_fg_color": "on_surface",
+    "view_bg_color": "surface_container_lowest", "view_fg_color": "on_surface",
+    "sidebar_bg_color": "surface_container_low", "sidebar_fg_color": "on_surface_variant",
+    "sidebar_backdrop_color": "surface_container_low",
+    "headerbar_bg_color": "surface_container", "headerbar_fg_color": "on_surface",
+    "popover_bg_color": "surface_container_high", "popover_fg_color": "on_surface",
+    "dialog_bg_color": "surface_container_high", "dialog_fg_color": "on_surface",
+    "accent_color": "primary", "accent_bg_color": "primary", "accent_fg_color": "on_primary",
+    "destructive_color": "error", "destructive_bg_color": "error", "destructive_fg_color": "on_error",
+    "card_bg_color": "surface_container_highest", "card_fg_color": "on_surface",
+}
 
 DEFAULTS = {"theme": "auto", "scheme": "dark", "accent": "#3584e4"}
 SCHEMES = ["system", "light", "dark"]
@@ -69,14 +87,44 @@ def save(cfg: dict) -> None:
     os.replace(tmp, SETTINGS_FILE)
 
 
-def matugen_active() -> bool:
-    if not MATUGEN_CSS.exists():
-        return False
-    gtk_css = Path.home() / ".config" / "gtk-4.0" / "gtk.css"
+def _material_palette(path: Path) -> tuple[dict, str] | None:
+    """(colors, "dark"|"light") from a Material-You JSON, or None if unusable."""
     try:
-        return "matugen" in gtk_css.read_text()
-    except OSError:
-        return False
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    mode = data.get("mode") if data.get("mode") in ("dark", "light") else "dark"
+    colors = data.get(mode) or data.get("colors", {}).get(mode)
+    if not isinstance(colors, dict) or not all(_is_hex(colors.get(r, "")) for r in set(MATERIAL_TO_GTK.values())):
+        return None
+    return colors, mode
+
+
+def auto_source() -> Path | None:
+    """Newest Matugen output we can use (GTK css or Material JSON)."""
+    candidates = [p for p in MATUGEN_JSON if p.exists() and _material_palette(p)]
+    if MATUGEN_CSS.exists():
+        candidates.append(MATUGEN_CSS)
+    return max(candidates, key=lambda p: p.stat().st_mtime, default=None)
+
+
+def auto_label() -> str:
+    src = auto_source()
+    if src is None:
+        return "Folgt dem System-Theme"
+    origin = src.parent.name if src.suffix == ".json" else "GTK"
+    return f"Neueste Matugen-Farben (aus {origin})"
+
+
+def matugen_active() -> bool:
+    return auto_source() is not None
+
+
+def material_css(colors: dict) -> str:
+    defines = "\n".join(f"@define-color {g} {colors[m]};" for g, m in MATERIAL_TO_GTK.items())
+    variables = "\n".join(f"  --{g.removesuffix('_color').replace('_', '-')}-color: {colors[m]};"
+                           for g, m in MATERIAL_TO_GTK.items() if not g.startswith("theme_"))
+    return f"{defines}\n:root {{\n{variables}\n}}\n"
 
 
 def _is_hex(text: str) -> bool:
@@ -114,12 +162,12 @@ def custom_css(accent: str, dark: bool) -> str:
 # ------------------------------------------------------------------ GTK side
 
 _provider = None
-_monitor = None
+_monitors: list = []
 
 
 def apply(display=None) -> None:
     """(Re)apply the configured appearance to all windows of this process."""
-    global _provider, _monitor
+    global _provider
     from .ui import Adw, Gdk, Gio, Gtk
 
     display = display or Gdk.Display.get_default()
@@ -138,13 +186,23 @@ def apply(display=None) -> None:
         _provider = Gtk.CssProvider()
         _provider.load_from_string(custom_css(cfg["accent"], style.get_dark()))
     else:
-        style.set_color_scheme(Adw.ColorScheme.DEFAULT)
-        if matugen_active():
-            # Load Matugen's colors ourselves too, so a wallpaper change shows up live.
+        source = auto_source()
+        palette = _material_palette(source) if source and source.suffix == ".json" else None
+        if palette:
+            colors, mode = palette
+            style.set_color_scheme(Adw.ColorScheme.FORCE_DARK if mode == "dark" else Adw.ColorScheme.FORCE_LIGHT)
             _provider = Gtk.CssProvider()
-            _provider.load_from_path(str(MATUGEN_CSS))
-            if _monitor is None:
-                _monitor = Gio.File.new_for_path(str(MATUGEN_CSS)).monitor_file(Gio.FileMonitorFlags.NONE, None)
-                _monitor.connect("changed", lambda *_a: load()["theme"] == "auto" and apply(display))
+            _provider.load_from_string(material_css(colors))
+        else:
+            style.set_color_scheme(Adw.ColorScheme.DEFAULT)
+            if source is not None:
+                _provider = Gtk.CssProvider()
+                _provider.load_from_path(str(source))
+        # Watch all Matugen outputs, so a wallpaper/theme change shows up live.
+        if not _monitors:
+            for path in [MATUGEN_CSS, *MATUGEN_JSON]:
+                mon = Gio.File.new_for_path(str(path)).monitor_file(Gio.FileMonitorFlags.NONE, None)
+                mon.connect("changed", lambda *_a: load()["theme"] == "auto" and apply(display))
+                _monitors.append(mon)
     if _provider is not None:
         Gtk.StyleContext.add_provider_for_display(display, _provider, priority)

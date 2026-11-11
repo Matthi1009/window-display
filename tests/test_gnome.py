@@ -93,5 +93,43 @@ class TestTheme(unittest.TestCase):
         self.assertIn("--accent-bg-color: #3a944a;", css)
 
 
+class TestAutoSource(unittest.TestCase):
+    """Auto mode must pick the newest Matugen output (widgetdeck JSON vs. GTK css)."""
+
+    def setUp(self):
+        import json, os, tempfile
+        from pathlib import Path
+        self.tmp = Path(tempfile.mkdtemp())
+        self.css = self.tmp / "colors-gtk.css"
+        self.css.write_text("@define-color accent_bg_color #ffb599;")
+        roles = set(theme.MATERIAL_TO_GTK.values())
+        self.json = self.tmp / "theme.json"
+        self.json.write_text(json.dumps({"mode": "dark", "dark": {r: "#adc6ff" for r in roles}}))
+        self.saved = theme.MATUGEN_CSS, theme.MATUGEN_JSON
+        theme.MATUGEN_CSS, theme.MATUGEN_JSON = self.css, [self.json]
+        self.os = os
+
+    def tearDown(self):
+        theme.MATUGEN_CSS, theme.MATUGEN_JSON = self.saved
+
+    def test_newest_wins(self):
+        self.os.utime(self.css, (1000, 1000))
+        self.os.utime(self.json, (2000, 2000))
+        self.assertEqual(theme.auto_source(), self.json)
+        self.os.utime(self.css, (3000, 3000))
+        self.assertEqual(theme.auto_source(), self.css)
+
+    def test_broken_json_ignored(self):
+        self.json.write_text("{kaputt")
+        self.assertEqual(theme.auto_source(), self.css)
+
+    def test_material_mapping(self):
+        colors, mode = theme._material_palette(self.json)
+        css = theme.material_css(colors)
+        self.assertEqual(mode, "dark")
+        self.assertIn("@define-color accent_bg_color #adc6ff;", css)
+        self.assertIn("--window-bg-color: #adc6ff;", css)
+
+
 if __name__ == "__main__":
     unittest.main()

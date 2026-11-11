@@ -367,8 +367,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         cfg = theme.load()
         group = Adw.PreferencesGroup(title="Aussehen", description="Gilt nur für dieses Programm")
         auto_name = "Automatisch (Matugen)" if theme.matugen_active() else "Automatisch (System)"
-        auto_sub = ("Farben kommen von deinem Hintergrundbild" if theme.matugen_active()
-                    else "Folgt dem System-Theme")
+        auto_sub = theme.auto_label()
         self.theme_row = _combo("Farben", [auto_name, "Selbst einstellen"],
                                 0 if cfg["theme"] == "auto" else 1, self._on_theme_mode)
         self.theme_row.set_subtitle(auto_sub if cfg["theme"] == "auto" else "Eigene Farben")
@@ -434,9 +433,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
     def _on_theme_mode(self, idx: int):
         mode = "auto" if idx == 0 else "custom"
-        self.theme_row.set_subtitle("Eigene Farben" if mode == "custom" else
-                                    ("Farben kommen von deinem Hintergrundbild" if theme.matugen_active()
-                                     else "Folgt dem System-Theme"))
+        self.theme_row.set_subtitle("Eigene Farben" if mode == "custom" else theme.auto_label())
         self._update_theme(theme=mode)
 
     def _on_scheme(self, idx: int):

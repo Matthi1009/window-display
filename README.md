@@ -63,7 +63,7 @@ hl.on("hyprland.start", function() hl.exec_cmd("~/.local/bin/window-display daem
 
 Deinstallieren: `./install.sh --uninstall` (Profile bleiben erhalten).
 
-## Benutzung
+## Anwendung
 
 | Befehl | Was es tut |
 |---|---|

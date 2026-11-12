@@ -4,11 +4,13 @@ from __future__ import annotations
 import fcntl
 import os
 import queue
+import shutil
+import subprocess
 import sys
 import threading
 import time
 
-from . import displays, layout, profiles
+from . import displays, layout, profiles, theme, updater
 from .util import notify, spawn
 
 DEBOUNCE = 1.0          # seconds of quiet before reacting to hotplug bursts
@@ -105,6 +107,7 @@ class Daemon:
                 q.put(ev)
 
         threading.Thread(target=reader, daemon=True).start()
+        threading.Thread(target=update_watch, daemon=True).start()
         log("läuft – warte auf Bildschirm-Änderungen")
 
         while True:
@@ -117,6 +120,37 @@ class Daemon:
                     break
             reload_only = all(e == "reload" for e in batch)
             self.handle(reload_only)
+
+
+def update_watch() -> None:
+    """Einmal am Tag auf GitHub nach Updates sehen und ggf. benachrichtigen."""
+    time.sleep(90)  # nach dem Login erst mal Ruhe (Netz ist evtl. noch nicht da)
+    while True:
+        try:
+            if theme.load()["update_check"] and updater.check_due():
+                st = updater.check()
+                if st.available:
+                    log(f"{st.behind} Update(s) verfügbar")
+                    _notify_update(st)
+        except Exception as e:  # der Dienst darf daran nie sterben
+            log(f"Update-Prüfung fehlgeschlagen: {e}")
+        time.sleep(3600)
+
+
+def _notify_update(st) -> None:
+    body = "\n".join(f"• {c}" for c in st.changes[:4])
+    if not shutil.which("notify-send"):
+        return
+    try:
+        # --wait + Aktion: Klick auf „Aktualisieren“ öffnet die Einstellungen
+        res = subprocess.run(
+            ["notify-send", "-a", "Bildschirme", "-i", "software-update-available", "--wait",
+             "-A", "open=Aktualisieren", f"Update für window-display ({st.behind} neu)", body],
+            capture_output=True, text=True, timeout=6 * 3600)
+        if res.stdout.strip() == "open":
+            spawn("settings")
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def run() -> int:

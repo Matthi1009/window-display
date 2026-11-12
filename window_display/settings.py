@@ -1,7 +1,9 @@
 """Full display settings window: arrange, resolution, refresh rate, scale, rotation."""
 from __future__ import annotations
 
+import os
 import sys
+import threading
 
 import gi
 
@@ -11,7 +13,7 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Graphene, Gsk, Pango  # noqa: E402
 
 from .ui import Adw, Gdk, GLib, Gtk, ConfirmWindow, install_css  # noqa: E402
-from . import displays, layout, miracast, profiles, theme  # noqa: E402
+from . import displays, layout, miracast, profiles, theme, updater  # noqa: E402
 
 APP_ID = "io.github.matthi.WindowDisplay.Settings"
 SCALES = [1.0, 1.25, 1.5, 1.6, 1.75, 2.0, 2.5, 3.0]
@@ -468,7 +470,94 @@ class SettingsWindow(Adw.ApplicationWindow):
         forget.add_prefix(Gtk.Image(icon_name="user-trash-symbolic"))
         forget.connect("activated", self._on_forget)
         group.add(forget)
+
+        # Updates: erst suchen, dann (falls vorhanden) aktualisieren
+        self.update_row = Adw.ActionRow(title="Updates", subtitle=f"Version {updater.version()}")
+        self.update_row.add_prefix(Gtk.Image(icon_name="software-update-available-symbolic"))
+        self.update_spinner = Gtk.Spinner(visible=False)
+        self.update_btn = Gtk.Button(label="Suchen", valign=Gtk.Align.CENTER)
+        self.update_btn.connect("clicked", self._on_update_clicked)
+        self.update_row.add_suffix(self.update_spinner)
+        self.update_row.add_suffix(self.update_btn)
+        group.add(self.update_row)
+        self._update_status = None
+
+        auto = Adw.SwitchRow(title="Automatisch nach Updates suchen",
+                             subtitle="Einmal am Tag, mit Benachrichtigung",
+                             active=theme.load()["update_check"])
+        auto.connect("notify::active", lambda r, _p: self._save_setting(update_check=r.get_active()))
+        group.add(auto)
         return group
+
+    def _save_setting(self, **changes):
+        cfg = theme.load()
+        cfg.update(changes)
+        try:
+            theme.save(cfg)
+        except OSError as e:
+            self.toast(f"Konnte nicht speichern: {e}")
+
+    def _busy(self, on: bool, label: str):
+        self.update_spinner.set_visible(on)
+        self.update_spinner.set_spinning(on)
+        self.update_btn.set_sensitive(not on)
+        self.update_btn.set_label(label)
+
+    def _on_update_clicked(self, _btn):
+        st = self._update_status
+        if st is not None and st.available:
+            self._start_update()
+        else:
+            self._start_check()
+
+    def _start_check(self):
+        self._busy(True, "Suche …")
+
+        def work():
+            st = updater.check()
+            GLib.idle_add(lambda: (self._show_check(st), False)[1])
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_check(self, st: "updater.Status"):
+        self._update_status = st
+        if st.error:
+            self._busy(False, "Erneut suchen")
+            self.update_row.set_subtitle(st.error)
+        elif st.available:
+            self._busy(False, "Aktualisieren")
+            self.update_btn.add_css_class("suggested-action")
+            neu = "; ".join(st.changes[:3]) + (" …" if len(st.changes) > 3 else "")
+            self.update_row.set_subtitle(f"{st.behind} neu: {neu}")
+        else:
+            self._busy(False, "Suchen")
+            self.update_row.set_subtitle(f"Version {st.version} – aktuell")
+
+    def _start_update(self):
+        self._busy(True, "Aktualisiere …")
+
+        def work():
+            ok, out = updater.run_update()
+            GLib.idle_add(lambda: (self._update_done(ok, out), False)[1])
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_done(self, ok: bool, out: str):
+        if not ok:
+            self._busy(False, "Erneut versuchen")
+            self._update_status = None
+            last = next((l for l in reversed(out.splitlines()) if l.strip()), "unbekannter Fehler")
+            self.update_row.set_subtitle(f"Fehlgeschlagen: {last.strip('! ')}")
+            return
+        self.toast("Aktualisiert – Fenster startet neu …")
+        # Fenster mit dem neuen Code neu starten
+        GLib.timeout_add(1200, self._restart)
+
+    def _restart(self):
+        from .util import child_env
+        os.execve(sys.executable, [sys.executable, "-m", "window_display", "settings", "--updated"],
+                  child_env())
+        return False
 
     # ------------------------------------------------------------ handlers
     def _changed(self, rebuild=True):
@@ -586,9 +675,15 @@ class SettingsApp(Adw.Application):
         install_css()
 
     def do_activate(self):
-        win = self.get_active_window() or SettingsWindow(self)
+        win = self.get_active_window()
+        if win is None:
+            win = SettingsWindow(self)
+            if getattr(self, "updated", False):
+                win.toast(f"Aktualisiert auf Version {updater.version()}")
         win.present()
 
 
-def run() -> int:
-    return SettingsApp().run([sys.argv[0]])
+def run(updated: bool = False) -> int:
+    app = SettingsApp()
+    app.updated = updated
+    return app.run([sys.argv[0]])

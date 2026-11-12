@@ -28,7 +28,7 @@ MATERIAL_TO_GTK = {
     "card_bg_color": "surface_container_highest", "card_fg_color": "on_surface",
 }
 
-DEFAULTS = {"theme": "auto", "scheme": "dark", "accent": "#3584e4"}
+DEFAULTS = {"theme": "auto", "scheme": "dark", "accent": "#3584e4", "update_check": True}
 SCHEMES = ["system", "light", "dark"]
 
 # GNOME's accent palette
@@ -75,6 +75,7 @@ def load() -> dict:
         out["theme"] = "auto"
     if out["scheme"] not in SCHEMES:
         out["scheme"] = "dark"
+    out["update_check"] = bool(out["update_check"])
     if not _is_hex(out["accent"]):
         out["accent"] = DEFAULTS["accent"]
     return out

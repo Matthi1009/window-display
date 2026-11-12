@@ -83,10 +83,16 @@ Deinstallieren: `./install.sh --uninstall` – stellt auch GNOMEs Super+P wieder
 
 ## Aktualisieren
 
-Im heruntergeladenen Ordner:
+Am einfachsten direkt in der App: **Bildschirme → Weitere → Updates → „Suchen“ / „Aktualisieren“**.
+Der Hintergrunddienst schaut außerdem einmal am Tag nach und meldet sich mit einer Benachrichtigung
+(abschaltbar unter „Automatisch nach Updates suchen“).
+
+Oder im Terminal:
 
 ```sh
-./update.sh
+window-display update           # aktualisieren
+window-display update --check   # nur nachsehen
+./update.sh                     # dasselbe direkt im heruntergeladenen Ordner
 ```
 
 Lädt die neueste Version (`git pull`), zeigt was neu ist, führt `install.sh` erneut aus und startet den
@@ -104,6 +110,7 @@ Hintergrunddienst mit dem neuen Code neu. Profile und Einstellungen bleiben erha
 | `window-display settings` | Einstellungsfenster (auch über den App-Eintrag „Bildschirme“) |
 | `window-display status` | Angeschlossene Bildschirme und aktuellen Modus anzeigen |
 | `window-display apply <modus>` | Modus direkt setzen: `pc_only`, `duplicate`, `extend`, `second_only` |
+| `window-display update` | Auf die neueste Version aktualisieren (`--check`: nur nachsehen) |
 | `window-display daemon` | Hintergrunddienst (startet automatisch) |
 
 Gespeichert wird in `~/.config/window-display/`: `profiles.json` (Bildschirm-Profile) und
@@ -122,6 +129,7 @@ Gespeichert wird in `~/.config/window-display/`: `profiles.json` (Bildschirm-Pro
 | `window_display/daemon.py` | Hotplug-Erkennung, Profile anwenden, Sicherheitsnetz |
 | `window_display/quickmenu.py` | Super+P-Menü |
 | `window_display/settings.py` | Einstellungsfenster |
+| `window_display/updater.py` | Updates: auf GitHub nachsehen, `update.sh` ausführen |
 | `window_display/theme.py` | Aussehen: Matugen/System oder eigene Farben |
 | `window_display/ui.py` | gemeinsames Styling und „Beibehalten?“-Dialog |
 

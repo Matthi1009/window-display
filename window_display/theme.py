@@ -28,8 +28,16 @@ MATERIAL_TO_GTK = {
     "card_bg_color": "surface_container_highest", "card_fg_color": "on_surface",
 }
 
-DEFAULTS = {"theme": "auto", "scheme": "dark", "accent": "#3584e4", "update_check": True}
+DEFAULTS = {"theme": "auto", "scheme": "dark", "accent": "#3584e4", "style": "solid", "update_check": True}
 SCHEMES = ["system", "light", "dark"]
+STYLES = ["solid", "frosted", "liquid"]
+STYLE_NAMES = ["Normal", "Frosted Glass", "Liquid Glass"]
+
+# Glas-Werte wie bei WidgetDeck (Frosted: Deckkraft 0.55 / Rand 0.14 / Glanz 0.11, Liquid „Pearl“: 0.42)
+GLASS = {
+    "frosted": {"win": 0.55, "panel": 0.55, "card": 0.40, "border": 0.14, "sheen": 0.11, "top": 0.16, "radius": 24},
+    "liquid": {"win": 0.30, "panel": 0.32, "card": 0.20, "border": 0.24, "sheen": 0.16, "top": 0.45, "radius": 28},
+}
 
 # GNOME's accent palette
 ACCENTS = {
@@ -76,6 +84,8 @@ def load() -> dict:
     if out["scheme"] not in SCHEMES:
         out["scheme"] = "dark"
     out["update_check"] = bool(out["update_check"])
+    if out["style"] not in STYLES:
+        out["style"] = "solid"
     if not _is_hex(out["accent"]):
         out["accent"] = DEFAULTS["accent"]
     return out
@@ -160,15 +170,88 @@ def custom_css(accent: str, dark: bool) -> str:
     return f"{defines}\n:root {{\n{variables}\n}}\n"
 
 
+def compositor_blur() -> bool:
+    """Hyprland macht die Unschärfe hinter durchsichtigen Fenstern; GNOME kann das nicht."""
+    return bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"))
+
+
+def style_label(style: str) -> str:
+    if style == "solid":
+        return "Undurchsichtige Fenster"
+    if compositor_blur():
+        return "Durchscheinend, Hyprland macht den Hintergrund unscharf"
+    return "Nur durchscheinend – dieser Desktop kann keine Unschärfe"
+
+
+def style_css(style: str, blur: bool = True) -> str:
+    """CSS für Frosted/Liquid Glass. Nutzt die benannten Farben, folgt also Matugen/eigenen Farben."""
+    g = GLASS.get(style)
+    if g is None:
+        return ""
+    g = dict(g)
+    if not blur:  # ohne Unschärfe wird es sonst unlesbar → deutlich deckender
+        for k in ("win", "panel", "card"):
+            g[k] = round(min(0.92, g[k] + 0.35), 3)
+    css = f"""
+window.background:not(.wd-overlay) {{ background-color: alpha(@window_bg_color, {g['win']}); }}
+window.wd-popup {{ background-color: transparent; }}
+toolbarview > .top-bar, headerbar {{ background-color: transparent; box-shadow: none; }}
+.wd-panel {{
+  background-color: alpha(@window_bg_color, {g['panel']});
+  background-image: linear-gradient(to bottom, alpha(white, {g['sheen']}), alpha(white, {g['sheen'] / 5:.3f}) 50%, transparent);
+  border: 1px solid alpha(white, {g['border']});
+  border-radius: {g['radius']}px;
+  box-shadow: inset 0 1px alpha(white, {g['top']});
+}}
+.boxed-list, .card {{
+  background-color: alpha(@card_bg_color, {g['card']});
+  border: 1px solid alpha(white, {g['border'] * 0.7:.3f});
+  box-shadow: inset 0 1px alpha(white, {g['top'] * 0.6:.3f});
+}}
+.wd-canvas {{
+  background-color: alpha(@view_bg_color, {g['card']});
+  border: 1px solid alpha(white, {g['border']});
+}}
+.wd-tile:hover, .wd-tile:focus-visible {{ background-color: alpha(white, 0.08); }}
+"""
+    if style == "liquid":
+        # Liquid: Lichtkante oben, schwächere Kanten unten/seitlich, Glanzfleck oben links
+        css += f"""
+.wd-panel, .boxed-list, .card {{
+  background-image: radial-gradient(circle at 12% 0%, alpha(white, 0.20), transparent 55%),
+                    linear-gradient(to bottom, alpha(white, {g['sheen']}), transparent 60%);
+  box-shadow: inset 0 1px alpha(white, {g['top']}), inset 0 -1px alpha(white, 0.06),
+              inset 1px 0 alpha(white, 0.10), inset -1px 0 alpha(white, 0.10);
+}}
+.boxed-list > row, .boxed-list > row:hover {{ background-color: transparent; }}
+.boxed-list > row:hover {{ background-color: alpha(white, 0.05); }}
+"""
+    return css
+
+
+def ensure_layer_blur() -> None:
+    """Blur-Regel für unsere Overlays (Menü, Rückfrage) – nur zur Laufzeit, keine Config-Datei."""
+    if not compositor_blur():
+        return
+    import subprocess
+    rule = ('hl.layer_rule({ name = "window_display_glass", match = { namespace = "^window-display-" }, '
+            'blur = true, ignore_alpha = 0.05 })')
+    try:
+        subprocess.run(["hyprctl", "eval", rule], capture_output=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 # ------------------------------------------------------------------ GTK side
 
 _provider = None
+_style_provider = None
 _monitors: list = []
 
 
 def apply(display=None) -> None:
     """(Re)apply the configured appearance to all windows of this process."""
-    global _provider
+    global _provider, _style_provider
     from .ui import Adw, Gdk, Gio, Gtk
 
     display = display or Gdk.Display.get_default()
@@ -207,3 +290,13 @@ def apply(display=None) -> None:
                 _monitors.append(mon)
     if _provider is not None:
         Gtk.StyleContext.add_provider_for_display(display, _provider, priority)
+
+    # Glas-Stil kommt obendrauf und nutzt die gerade gesetzten Farben
+    if _style_provider is not None:
+        Gtk.StyleContext.remove_provider_for_display(display, _style_provider)
+        _style_provider = None
+    css = style_css(cfg["style"], compositor_blur())
+    if css:
+        _style_provider = Gtk.CssProvider()
+        _style_provider.load_from_string(css)
+        Gtk.StyleContext.add_provider_for_display(display, _style_provider, priority + 10)

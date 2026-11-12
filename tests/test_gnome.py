@@ -93,6 +93,33 @@ class TestTheme(unittest.TestCase):
         self.assertIn("--accent-bg-color: #3a944a;", css)
 
 
+class TestGlass(unittest.TestCase):
+    def test_solid_has_no_css(self):
+        self.assertEqual(theme.style_css("solid"), "")
+
+    def test_frosted_and_liquid(self):
+        frosted, liquid = theme.style_css("frosted"), theme.style_css("liquid")
+        self.assertIn("alpha(@window_bg_color, 0.55)", frosted)
+        self.assertIn("alpha(@window_bg_color, 0.3)", liquid)
+        self.assertIn("radial-gradient", liquid)
+        self.assertNotIn("radial-gradient", frosted)
+
+    def test_more_opaque_without_blur(self):
+        # GNOME kann keine Unschärfe → deutlich deckender, damit es lesbar bleibt
+        self.assertIn("alpha(@window_bg_color, 0.65)", theme.style_css("liquid", blur=False))
+
+    def test_invalid_style_falls_back(self):
+        import json, tempfile
+        from pathlib import Path
+        saved = theme.SETTINGS_FILE
+        theme.SETTINGS_FILE = Path(tempfile.mkdtemp()) / "settings.json"
+        theme.SETTINGS_FILE.write_text(json.dumps({"style": "kaputt"}))
+        try:
+            self.assertEqual(theme.load()["style"], "solid")
+        finally:
+            theme.SETTINGS_FILE = saved
+
+
 class TestAutoSource(unittest.TestCase):
     """Auto mode must pick the newest Matugen output (widgetdeck JSON vs. GTK css)."""
 

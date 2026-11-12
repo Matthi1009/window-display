@@ -375,6 +375,10 @@ class SettingsWindow(Adw.ApplicationWindow):
         self.theme_row.set_subtitle(auto_sub if cfg["theme"] == "auto" else "Eigene Farben")
         group.add(self.theme_row)
 
+        self.style_row = _combo("Stil", theme.STYLE_NAMES, theme.STYLES.index(cfg["style"]), self._on_style)
+        self.style_row.set_subtitle(theme.style_label(cfg["style"]))
+        group.add(self.style_row)
+
         self.scheme_row = _combo("Hell / Dunkel", ["Wie System", "Hell", "Dunkel"],
                                  theme.SCHEMES.index(cfg["scheme"]), self._on_scheme)
         group.add(self.scheme_row)
@@ -437,6 +441,11 @@ class SettingsWindow(Adw.ApplicationWindow):
         mode = "auto" if idx == 0 else "custom"
         self.theme_row.set_subtitle("Eigene Farben" if mode == "custom" else theme.auto_label())
         self._update_theme(theme=mode)
+
+    def _on_style(self, idx: int):
+        style = theme.STYLES[idx]
+        self.style_row.set_subtitle(theme.style_label(style))
+        self._update_theme(style=style)
 
     def _on_scheme(self, idx: int):
         self._update_theme(scheme=theme.SCHEMES[idx])

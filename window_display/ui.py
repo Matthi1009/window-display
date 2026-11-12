@@ -74,6 +74,9 @@ def make_overlay(win: Gtk.Window, namespace: str, anchor_right: bool = False,
             # attach after the first activation, so the window can't close before it got focus
             GLib.timeout_add(500, lambda: (win.connect("notify::is-active", on_active), False)[1])
         return
+    from . import theme
+    if theme.load()["style"] != "solid":
+        theme.ensure_layer_blur()  # muss vor dem ersten Anzeigen stehen, Hyprland prüft Regeln beim Mappen
     LayerShell.init_for_window(win)
     LayerShell.set_namespace(win, namespace)
     LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)

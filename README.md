@@ -25,6 +25,10 @@ Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig.
   schaltet sich der Laptop-Bildschirm wieder ein.
 - **Aussehen** – folgt automatisch [Matugen](https://github.com/InioX/matugen) bzw. dem System-Theme
   (Farbwechsel beim Hintergrundbild-Wechsel live), oder selbst einstellen: Hell/Dunkel + Akzentfarbe.
+  Dazu drei Stile: *Normal*, *Frosted Glass* (milchig, unscharfer Hintergrund) und *Liquid Glass*
+  (durchsichtiger, mit Lichtkanten). Die Unschärfe macht Hyprland – für das Super+P-Menü setzt die App
+  dafür zur Laufzeit eine Blur-Regel, an der Config wird nichts geändert. Auf GNOME (keine Unschärfe)
+  sind die Glas-Stile deckender, damit alles lesbar bleibt.
 - **Drahtlos (Miracast)** – startet [GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays),
   falls installiert. Läuft trotz des Namens auch auf Hyprland (nutzt NetworkManager-Wi-Fi-P2P und
   `xdg-desktop-portal-hyprland` zum Bildschirm-Teilen).

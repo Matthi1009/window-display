@@ -81,6 +81,21 @@ cd window-display
 
 Deinstallieren: `./install.sh --uninstall` – stellt auch GNOMEs Super+P wieder her (Profile bleiben erhalten).
 
+## Aktualisieren
+
+Im heruntergeladenen Ordner:
+
+```sh
+./update.sh
+```
+
+Lädt die neueste Version (`git pull`), zeigt was neu ist, führt `install.sh` erneut aus und startet den
+Hintergrunddienst mit dem neuen Code neu. Profile und Einstellungen bleiben erhalten. Bei lokalen
+Änderungen am Code bricht das Update ab, statt etwas zu überschreiben.
+
+> Als ZIP heruntergeladen statt mit `git clone`? Dann geht `update.sh` nicht – einfach einmal per
+> `git clone` neu installieren.
+
 ## Anwendung
 
 | Befehl | Was es tut |

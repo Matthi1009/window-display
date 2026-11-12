@@ -117,8 +117,14 @@ if [[ $installed == 0 ]]; then
   echo "! Weder Hyprland-Config noch GNOME gefunden – Super+P bitte selbst binden: $BIN menu"
 fi
 
-# start the service now (a second instance exits by itself)
+# Dienst (neu) starten – ein laufender alter Dienst hätte sonst noch den alten Code geladen
 if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || is_gnome; then
+  if pkill -f "python3 -m [w]indow_display daemon"; then
+    sleep 0.5
+    msg="neu gestartet"
+  else
+    msg="gestartet"
+  fi
   setsid "$BIN" daemon >/dev/null 2>&1 < /dev/null &
-  echo "✓ Hintergrunddienst gestartet"
+  echo "✓ Hintergrunddienst $msg"
 fi

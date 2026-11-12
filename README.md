@@ -26,7 +26,8 @@ Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig.
 - **Aussehen** – folgt automatisch [Matugen](https://github.com/InioX/matugen) bzw. dem System-Theme
   (Farbwechsel beim Hintergrundbild-Wechsel live), oder selbst einstellen: Hell/Dunkel + Akzentfarbe.
 - **Drahtlos (Miracast)** – startet [GNOME Network Displays](https://gitlab.gnome.org/GNOME/gnome-network-displays),
-  falls installiert.
+  falls installiert. Läuft trotz des Namens auch auf Hyprland (nutzt NetworkManager-Wi-Fi-P2P und
+  `xdg-desktop-portal-hyprland` zum Bildschirm-Teilen).
 - **Config bleibt sauber** – Einstellungen werden live gesetzt und in eigenen Profilen gespeichert.
 
 ## Unterstützte Desktops

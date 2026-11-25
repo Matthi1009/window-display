@@ -11,7 +11,7 @@ Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig.
   <img src="docs/settings.png" alt="Einstellungsfenster" width="45%">
 </p>
 
-## Features
+## Core Features
 
 - **Super+P-Schnellmenü** – *Nur PC-Bildschirm*, *Duplizieren*, *Erweitern*, *Nur zweiter Bildschirm*.
   Nochmal Super+P springt zur nächsten Option, Enter wendet an, Esc schließt.

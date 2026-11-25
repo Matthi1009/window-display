@@ -1,7 +1,7 @@
 # window-display
 
 **Windows-artige Bildschirm- und Beamer-Verwaltung für Hyprland und GNOME.**
-Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig. Wie `Win+P`, nur auf Linux.
+Monitor einstecken → Menü erscheint → „Duplizieren“ klicken → fertig. Wie `Win+P`, nur auf Linux!
 
 *Windows-style display & projector switcher for Hyprland and GNOME (Super+P menu, settings window, hotplug profiles).*
 
